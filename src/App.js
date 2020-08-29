@@ -21,6 +21,8 @@ import Container from '@material-ui/core/Container';
 import Box from '@material-ui/core/Box';
 import Paper from '@material-ui/core/Paper';
 
+import HashBlockInfo from './components/HashBlockInfo';
+
 import { DropzoneArea } from 'material-ui-dropzone'
 
 
@@ -152,7 +154,7 @@ class App extends React.Component {
     super(props);
     this.state = {
       hashValue: '',
-      lastResult: '---',
+      currentStatus: '---',
       canFileBeHashed: false,
     };
 
@@ -197,7 +199,10 @@ class App extends React.Component {
           if (parseInt(result[0]) > 0) {
             alert('this document has already been hashed on the blockchain');
           } else {
-            this.setState({waitingForBlockchain: true});
+            this.setState({
+              waitingForBlockchain: true,
+              currentStatus: 'Please wait while the hashcode is being mined into the blockchain. This can take a few minutes.'
+            });
             this.state.notarizer.notarize(sha256Hash, (error, result) => {
               console.log('this is our result ', result);
               //$("#result").html(result);
@@ -223,13 +228,18 @@ class App extends React.Component {
         if (!error) {
           if (parseInt(result[0]) > 0) {
             this.setState({
-              lastResult: 'The file has been hashed before.',
+              currentStatus: 'The file has been hashed before.',
               canFileBeHashed: false,
+              blockInfo: {
+                mineTime: parseInt(result[0]),
+                blockNumber: parseInt(result[1])
+              }
             });
           } else {
             this.setState({
-              lastResult: 'The file is currently unknown.',
+              currentStatus: 'The file is currently unknown.',
               canFileBeHashed: true,
+              blockInfo: false
             });
           }
           console.log('Got back from the chain: ', result.toString());
@@ -280,34 +290,68 @@ class App extends React.Component {
     console.log('this is my web3:', getWeb3());
     console.log('tjhis is my ABI: ', NotarizerAbi);
 
-
-    let contract = getWeb3().eth.contract(NotarizerAbi);
-    let notarizer = contract.at('0xF3aE5E81E6469bAD34D429b2E8b94cc07Bee32ee');
-
-    let documentNotarizedEvent = notarizer.DocumentNotarized();
-
-    this.setState({
-      notarizer,
-      documentNotarizedEvent
-    });
-
-    documentNotarizedEvent.watch((error,result) => {
-      if (!error) {
-        if (result.args.from === getWeb3().eth.defaultAccount) {
-          this.setState({waitingForBlockchain: false});
-          console.log('we did get the event for the document having nbeen nortrized', result);
-        }
-      } else {
-        console.log('There was an error in the event callback', error );
+    getWeb3().version.getNetwork((err, networkId) => {
+      
+      console.log('in the callback this is our network id ' + networkId);
+      let networkName;
+      let contractAddress;
+      switch (networkId) {
+        case "1":
+          networkName='mainnet';
+          contractAddress='0x5a7901d2c9C52C7149F9D4dA35f92242eB5d9992';
+          break;
+        case "3":
+          networkName='ropsten';
+          break;
+        case "4":
+          networkName='rinkeby';
+          contractAddress='0xF3aE5E81E6469bAD34D429b2E8b94cc07Bee32ee';
+          break;
+        default:
+          console.log('This is an unknown network.');
+          break;
       }
       
+      let contract = getWeb3().eth.contract(NotarizerAbi);
+      let notarizer = contract.at(contractAddress);
+  
+      let documentNotarizedEvent = notarizer.DocumentNotarized();
+      documentNotarizedEvent.watch((error,result) => {
+        if (!error) {
+          if (result.args.from === getWeb3().eth.defaultAccount) {
+            this.setState({
+              waitingForBlockchain: false,
+              canFileBeHashed: false,
+              currentStatus: 'Document-Hash has been successfully stored on the blockchain!',
+              blockInfo: {
+                mineTime: result.args.mineTime
+              }
+            });
+            console.log('we did get the event for the document having nbeen nortrized', result);
+          }
+        } else {
+          console.log('There was an error in the event callback', error );
+        }
+        
+      });
+
+  
+      this.setState({
+        notarizer,
+        documentNotarizedEvent,
+        networkName
+      });
+      
+
     });
+
   }
 
   isHashButtonDisabled() {
     return !this.state.canFileBeHashed || this.state.waitingForBlockchain;  
   }
-  
+
+
   render() {
     const {classes} = this.props;
     return (
@@ -316,7 +360,7 @@ class App extends React.Component {
           <AppBar position="static" color="default" elevation={0} className={classes.appBar}>
             <Toolbar className={classes.toolbar}>
               <Typography variant="h6" color="inherit" noWrap className={classes.toolbarTitle}>
-                Company name
+                documented.me
               </Typography>
               <nav>
                 <Link variant="button" color="textPrimary" href="#" className={classes.link}>
@@ -338,11 +382,11 @@ class App extends React.Component {
           { /* Hero unit */ }
           <Container maxWidth="sm" component="main" className={classes.heroContent}>
             <Typography component="h1" variant="h2" align="center" color="textPrimary" gutterBottom>
-              Pricing
+              FileHasher
             </Typography>
             <Typography variant="h5" align="center" color="textSecondary" component="p">
-              Quickly build an effective pricing table for your potential customers with this layout.
-              It's built with default Material-UI components with little customization.
+              Quickly store the hascode of you file on the ethereum-blockchain. Your document will not leave your computer,
+              the sha256-hash will be calculated in your browser. Only the hash-code will then be stored on the blockchain.
             </Typography>
 
           </Container>
@@ -369,7 +413,11 @@ class App extends React.Component {
             }
             <br/>
             
-            {this.state.lastResult}
+            Status: {this.state.currentStatus}
+            
+            <br/>
+
+            { this.state.blockInfo ? <HashBlockInfo blockInfo={this.state.blockInfo} networkName={this.state.networkName} /> : ''}
 
             </Paper>
 
@@ -377,7 +425,8 @@ class App extends React.Component {
 
           <Container maxWidth="sm" component="main" className={classes.mainContent} 
             style={{textAlign: 'center'}}>
-            <Button variant="contained" color="primary" disabled={this.isHashButtonDisabled()} onClick={this.handleFileSubmit.bind(this)}>
+
+            <Button variant="contained" color="secondary" disabled={this.isHashButtonDisabled()} onClick={this.handleFileSubmit.bind(this)}>
               Submit Hash
             </Button>
 
@@ -437,7 +486,6 @@ class App extends React.Component {
               </label>
               <br />
               <button type="button" onClick={this.handleFileSubmit.bind(this)}>Submit Hash</button>
-              <button type="button" onClick={this.handleFileCheck.bind(this)}>Check Hash</button>
             </form>          
             
         </div>
