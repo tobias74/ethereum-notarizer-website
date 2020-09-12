@@ -1,6 +1,5 @@
 import React from 'react';
 import './App.css';
-import { getWeb3 } from './eth/network';
 import NotarizerAbi from './eth/notarizer-abi';
 import { sha256 } from 'js-sha256';
 
@@ -37,7 +36,6 @@ import HashBlockInfo from './components/HashBlockInfo';
 import { DropzoneArea } from 'material-ui-dropzone'
 
 import { supportedChains } from './eth/chains';
-import { apiGetAccountAssets } from "./eth/api";
 
 function Copyright() {
   return (
@@ -168,7 +166,6 @@ const INITIAL_STATE = {
   connected: false,
   chainId: 1,
   networkId: 1,
-  assets: [],
   showModal: false,
   pendingRequest: false,
   result: null
@@ -274,7 +271,8 @@ class App extends React.Component {
       chainId,
       networkId
     });
-    await this.getAccountAssets();
+    this.loadNetworkContext();
+
   };
 
   subscribeProvider = async (provider) => {
@@ -284,24 +282,25 @@ class App extends React.Component {
     provider.on("close", () => this.resetApp());
     provider.on("accountsChanged", async (accounts) => {
       await this.setState({ address: accounts[0] });
-      await this.getAccountAssets();
+      this.loadNetworkContext();
     });
     provider.on("chainChanged", async (chainId) => {
       const { web3 } = this.state;
       const networkId = await web3.eth.net.getId();
       await this.setState({ chainId, networkId });
-      await this.getAccountAssets();
+      this.loadNetworkContext();
     });
 
     provider.on("networkChanged", async (networkId) => {
       const { web3 } = this.state;
       const chainId = await web3.eth.chainId();
       await this.setState({ chainId, networkId });
-      await this.getAccountAssets();
+      this.loadNetworkContext();
     });
   };
 
   getNetwork = () => getChainData(this.state.chainId).network;
+  getChainName = () => getChainData(this.state.chainId).name;
 
   getProviderOptions = () => {
     const providerOptions = {
@@ -327,20 +326,6 @@ class App extends React.Component {
     return providerOptions;
   };
 
-  getAccountAssets = async () => {
-    const { address, chainId } = this.state;
-    this.setState({ fetching: true });
-    try {
-      // get account balances
-      const assets = await apiGetAccountAssets(address, chainId);
-
-      await this.setState({ fetching: false, assets });
-    } catch (error) {
-      console.error(error); // tslint:disable-line
-      await this.setState({ fetching: false });
-    }
-  };  
-  
   
   resetApp = async () => {
     const { web3 } = this.state;
@@ -353,6 +338,58 @@ class App extends React.Component {
   
   /////////////////////////////OLD///////////////////////////////////
   
+
+  loadNetworkContext() {
+    const { web3, networkId, address } = this.state;
+    console.log('Loading Contract...');
+    let networkName;
+    let contractAddress;
+    switch (networkId) {
+      case 1:
+        networkName='mainnet';
+        contractAddress='0x5a7901d2c9C52C7149F9D4dA35f92242eB5d9992';
+        break;
+      case 3:
+        networkName='ropsten';
+        break;
+      case 4:
+        networkName='rinkeby';
+        contractAddress='0xF3aE5E81E6469bAD34D429b2E8b94cc07Bee32ee';
+        break;
+      default:
+        console.log('This is an unknown network.');
+        break;
+    }
+    
+    var notarizer = new web3.eth.Contract(NotarizerAbi, contractAddress);      
+
+    let documentNotarizedEvent = notarizer.events.DocumentNotarized();
+    documentNotarizedEvent.on('data', (event) => {
+      console.log('we did get the event for a document having nbeen nortrized', event);
+
+      if (event.address === address) {
+        web3.eth.getBlock(event.blockNumber, (block) => {
+          this.setState({
+            waitingForBlockchain: false,
+            canFileBeHashed: false,
+            currentStatus: 'Document-Hash has been successfully stored on the blockchain!',
+            blockInfo: {
+              mineTime: block.timestamp
+            }
+          });
+          
+        });
+      }
+    });
+
+    console.log('setting contract in state ', notarizer);
+    this.setState({
+      notarizer,
+      networkName,
+      chainName: this.getChainName()
+    });
+    
+  }  
 
   handleDropzoneChange(files) {
     console.log(files);
@@ -378,6 +415,8 @@ class App extends React.Component {
   handleFileSubmit(event) {
     event.preventDefault();
 
+    const { address, web3, networkId } = this.state;
+
     this.state.file.arrayBuffer().then((buffer) => {
       let sha256Hash = sha256(buffer);
       console.log('this my buffer ', sha256Hash);
@@ -391,8 +430,7 @@ class App extends React.Component {
             waitingForBlockchain: true,
             currentStatus: 'Please wait while the hashcode is being mined into the blockchain. This can take a few minutes.'
           });
-          console.log('using from: ', getWeb3().eth.defaultAccount);
-          this.state.notarizer.methods.notarize('0x' + sha256Hash).send({from: getWeb3().eth.defaultAccount}).then( (result) => {
+          this.state.notarizer.methods.notarize('0x' + sha256Hash).send({from: address}).then( (result) => {
             console.log('this is our result ', result);
           });
         }
@@ -472,51 +510,6 @@ class App extends React.Component {
     getWeb3().eth.net.getId().then(networkId => {
       
       console.log('in the callback this is our network id ' + networkId);
-      let networkName;
-      let contractAddress;
-      switch (networkId) {
-        case 1:
-          networkName='mainnet';
-          contractAddress='0x5a7901d2c9C52C7149F9D4dA35f92242eB5d9992';
-          break;
-        case 3:
-          networkName='ropsten';
-          break;
-        case 4:
-          networkName='rinkeby';
-          contractAddress='0xF3aE5E81E6469bAD34D429b2E8b94cc07Bee32ee';
-          break;
-        default:
-          console.log('This is an unknown network.');
-          break;
-      }
-      
-      var notarizer = new (getWeb3().eth.Contract)(NotarizerAbi, contractAddress);      
-
-      let documentNotarizedEvent = notarizer.events.DocumentNotarized();
-      documentNotarizedEvent.on('data', (event) => {
-        console.log('we did get the event for the document having nbeen nortrized', event);
-
-        if (event.address === getWeb3().eth.defaultAccount) {
-          getWeb3().eth.getBlock(event.blockNumber, (block) => {
-            this.setState({
-              waitingForBlockchain: false,
-              canFileBeHashed: false,
-              currentStatus: 'Document-Hash has been successfully stored on the blockchain!',
-              blockInfo: {
-                mineTime: block.timestamp
-              }
-            });
-            
-          });
-        }
-      });
-
-  
-      this.setState({
-        notarizer,
-        networkName
-      });
       
 
     });
@@ -535,14 +528,14 @@ class App extends React.Component {
   render() {
     const {classes} = this.props;
     const {
-      assets,
       address,
       connected,
       chainId,
       fetching,
       showModal,
       pendingRequest,
-      result
+      result,
+      chainName,
     } = this.state;
     
     return (
@@ -571,12 +564,8 @@ class App extends React.Component {
           </AppBar>
 
           {
-          (!!assets && !!assets.length) ? 'whattt' : 'nooooo'
-          }
-          
-          {
             (connected) ? 
-              <span onClick={this.resetApp}>disconnect</span> 
+              <span onClick={this.resetApp}>connected to {chainName}, disconnect</span> 
               : 
               <span onClick={this.onConnect}>please connect</span>
           }
