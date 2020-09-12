@@ -1,22 +1,34 @@
 import Web3 from 'web3';
+import Web3Modal from "web3modal";
+import WalletConnectProvider from "@walletconnect/web3-provider";
+import Authereum from "authereum";
+
+const providerOptions = {
+  authereum: {
+    package: Authereum // required
+  }
+};
+
+const web3Modal = new Web3Modal({
+  cacheProvider: false,
+  providerOptions
+});
+
+
 
 let myWeb3;
 
+
+web3Modal.connect().then((provider) => {
+  myWeb3 = new Web3(provider);
+});
+
+
+
+
+
+
 export function getWeb3() {
-  if (typeof window.web3 !== 'undefined') {
-    // this statement is executed if you are using 
-    // MetaMask 
-    async function enableAccounts() {
-      await window.ethereum.enable()
-    }
-    enableAccounts();
-    myWeb3 = window.web3;
-  } else {
-    // set the provider you want from Web3.providers
-    myWeb3 = new Web3(
-      new Web3.providers.HttpProvider(
-        "http://localhost:8545"));
-  }
 
   return myWeb3;
 }

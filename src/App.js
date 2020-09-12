@@ -4,6 +4,17 @@ import { getWeb3 } from './eth/network';
 import NotarizerAbi from './eth/notarizer-abi';
 import { sha256 } from 'js-sha256';
 
+import Web3 from "web3";
+import { convertUtf8ToHex } from "@walletconnect/utils";
+
+import Web3Modal from "web3modal";
+import WalletConnectProvider from "@walletconnect/web3-provider";
+
+import Fortmatic from "fortmatic";
+import Authereum from "authereum";
+import UniLogin from "@unilogin/provider";
+
+
 import AppBar from '@material-ui/core/AppBar';
 import Button from '@material-ui/core/Button';
 import Card from '@material-ui/core/Card';
@@ -25,6 +36,8 @@ import HashBlockInfo from './components/HashBlockInfo';
 
 import { DropzoneArea } from 'material-ui-dropzone'
 
+import { supportedChains } from './eth/chains';
+import { apiGetAccountAssets } from "./eth/api";
 
 function Copyright() {
   return (
@@ -147,27 +160,199 @@ const footers = [
 ];
 
 
+const INITIAL_STATE = {
+  fetching: false,
+  address: "",
+  web3: null,
+  provider: null,
+  connected: false,
+  chainId: 1,
+  networkId: 1,
+  assets: [],
+  showModal: false,
+  pendingRequest: false,
+  result: null
+};
+
+function initWeb3(provider) {
+  const web3 = new Web3(provider);
+
+  web3.eth.extend({
+    methods: [
+      {
+        name: "chainId",
+        call: "eth_chainId",
+        outputFormatter: web3.utils.hexToNumber
+      }
+    ]
+  });
+
+  return web3;
+}
+
+export function getChainData(chainId) {
+  const chainData = supportedChains.filter(
+    (chain) => chain.chain_id === chainId
+  )[0];
+
+  if (!chainData) {
+    throw new Error("ChainId missing or not supported");
+  }
+
+  const API_KEY = process.env.REACT_APP_INFURA_ID;
+
+  if (
+    chainData.rpc_url.includes("infura.io") &&
+    chainData.rpc_url.includes("%API_KEY%") &&
+    API_KEY
+  ) {
+    const rpcUrl = chainData.rpc_url.replace("%API_KEY%", API_KEY);
+
+    return {
+      ...chainData,
+      rpc_url: rpcUrl
+    };
+  }
+
+  return chainData;
+}
 
 
 class App extends React.Component {
+  
   constructor(props) {
     super(props);
     this.state = {
+      ...INITIAL_STATE,
       hashValue: '',
       currentStatus: '---',
       canFileBeHashed: false,
     };
 
+    this.web3Modal = new Web3Modal({
+      network: this.getNetwork(),
+      cacheProvider: true,
+      providerOptions: this.getProviderOptions()
+    });
+    
     this.handleChange = this.handleChange.bind(this);
     this.handleSubmit = this.handleSubmit.bind(this);
     this.handleChangeHashLookup = this.handleChangeHashLookup.bind(this);
-    this.handleSubmitHashLookup = this.handleSubmitHashLookup.bind(this);
 
     this.handleFileSubmit = this.handleFileSubmit.bind(this);
     this.handleFileCheck = this.handleFileCheck.bind(this);
     this.fileInput = React.createRef();
 
   }
+
+  componentDidMount() {
+    if (this.web3Modal.cachedProvider) {
+      this.onConnect();
+    }
+  }
+
+  onConnect = async () => {
+    const provider = await this.web3Modal.connect();
+
+    await this.subscribeProvider(provider);
+
+    const web3 = initWeb3(provider);
+
+    const accounts = await web3.eth.getAccounts();
+
+    const address = accounts[0];
+
+    const networkId = await web3.eth.net.getId();
+
+    const chainId = await web3.eth.chainId();
+
+    await this.setState({
+      web3,
+      provider,
+      connected: true,
+      address,
+      chainId,
+      networkId
+    });
+    await this.getAccountAssets();
+  };
+
+  subscribeProvider = async (provider) => {
+    if (!provider.on) {
+      return;
+    }
+    provider.on("close", () => this.resetApp());
+    provider.on("accountsChanged", async (accounts) => {
+      await this.setState({ address: accounts[0] });
+      await this.getAccountAssets();
+    });
+    provider.on("chainChanged", async (chainId) => {
+      const { web3 } = this.state;
+      const networkId = await web3.eth.net.getId();
+      await this.setState({ chainId, networkId });
+      await this.getAccountAssets();
+    });
+
+    provider.on("networkChanged", async (networkId) => {
+      const { web3 } = this.state;
+      const chainId = await web3.eth.chainId();
+      await this.setState({ chainId, networkId });
+      await this.getAccountAssets();
+    });
+  };
+
+  getNetwork = () => getChainData(this.state.chainId).network;
+
+  getProviderOptions = () => {
+    const providerOptions = {
+      walletconnect: {
+        package: WalletConnectProvider,
+        options: {
+          infuraId: process.env.REACT_APP_INFURA_ID
+        }
+      },
+      fortmatic: {
+        package: Fortmatic,
+        options: {
+          key: process.env.REACT_APP_FORTMATIC_KEY
+        }
+      },
+      authereum: {
+        package: Authereum
+      },
+      unilogin: {
+        package: UniLogin
+      }
+    };
+    return providerOptions;
+  };
+
+  getAccountAssets = async () => {
+    const { address, chainId } = this.state;
+    this.setState({ fetching: true });
+    try {
+      // get account balances
+      const assets = await apiGetAccountAssets(address, chainId);
+
+      await this.setState({ fetching: false, assets });
+    } catch (error) {
+      console.error(error); // tslint:disable-line
+      await this.setState({ fetching: false });
+    }
+  };  
+  
+  
+  resetApp = async () => {
+    const { web3 } = this.state;
+    if (web3 && web3.currentProvider && web3.currentProvider.close) {
+      await web3.currentProvider.close();
+    }
+    await this.web3Modal.clearCachedProvider();
+    this.setState({ ...INITIAL_STATE });
+  }  
+  
+  /////////////////////////////OLD///////////////////////////////////
+  
 
   handleDropzoneChange(files) {
     console.log(files);
@@ -186,6 +371,10 @@ class App extends React.Component {
     }
   }
 
+  async getByHash(sha256Hash) {
+    return this.state.notarizer.methods.getByHash('0x'+ sha256Hash).call();
+  }
+
   handleFileSubmit(event) {
     event.preventDefault();
 
@@ -193,23 +382,20 @@ class App extends React.Component {
       let sha256Hash = sha256(buffer);
       console.log('this my buffer ', sha256Hash);
 
-      this.state.notarizer.getByHash(sha256Hash, (error, result) => {
-        if (!error) {
-          console.log('Got back from the chain: ', result);
-          if (parseInt(result[0]) > 0) {
-            alert('this document has already been hashed on the blockchain');
-          } else {
-            this.setState({
-              waitingForBlockchain: true,
-              currentStatus: 'Please wait while the hashcode is being mined into the blockchain. This can take a few minutes.'
-            });
-            this.state.notarizer.notarize(sha256Hash, (error, result) => {
-              console.log('this is our result ', result);
-              //$("#result").html(result);
-            });
-          }
-        } else
-          console.error(error);
+      this.getByHash(sha256Hash).then( (result) => {
+        console.log('Got back from the chain: ', result);
+        if (parseInt(result[0]) > 0) {
+          alert('this document has already been hashed on the blockchain');
+        } else {
+          this.setState({
+            waitingForBlockchain: true,
+            currentStatus: 'Please wait while the hashcode is being mined into the blockchain. This can take a few minutes.'
+          });
+          console.log('using from: ', getWeb3().eth.defaultAccount);
+          this.state.notarizer.methods.notarize('0x' + sha256Hash).send({from: getWeb3().eth.defaultAccount}).then( (result) => {
+            console.log('this is our result ', result);
+          });
+        }
       });
     });
   }
@@ -224,27 +410,25 @@ class App extends React.Component {
       let sha256Hash = sha256(buffer);
       console.log('this my buffer ', sha256Hash);
 
-      this.state.notarizer.getByHash(sha256Hash, (error, result) => {
-        if (!error) {
-          if (parseInt(result[0]) > 0) {
-            this.setState({
-              currentStatus: 'The file has been hashed before.',
-              canFileBeHashed: false,
-              blockInfo: {
-                mineTime: parseInt(result[0]),
-                blockNumber: parseInt(result[1])
-              }
-            });
-          } else {
-            this.setState({
-              currentStatus: 'The file is currently unknown.',
-              canFileBeHashed: true,
-              blockInfo: false
-            });
-          }
-          console.log('Got back from the chain: ', result.toString());
-        } else
-          console.error(error);
+      this.getByHash(sha256Hash).then((result) => {
+        console.log('Got back from the chain: ', result);
+
+        if (parseInt(result[0]) > 0) {
+          this.setState({
+            currentStatus: 'The file has been hashed before.',
+            canFileBeHashed: false,
+            blockInfo: {
+              mineTime: parseInt(result[0]),
+              blockNumber: parseInt(result[1])
+            }
+          });
+        } else {
+          this.setState({
+            currentStatus: 'The file is currently unknown.',
+            canFileBeHashed: true,
+            blockInfo: false
+          });
+        }
       });
     });
   }
@@ -272,38 +456,33 @@ class App extends React.Component {
     });
   }
 
-  handleSubmitHashLookup() {
-    this.state.notarizer.getByHash(this.state.lookupHashValue,
-      (error, result) => {
-        if (!error) {
-          console.log('FOUND: ', result.toString());
-        } else
-          console.error(error);
-      });
 
-    event.preventDefault();
-  }
+  async myOwnComponentDidMount() {
+    setTimeout(() => {
 
 
-  async componentDidMount() {
+    getWeb3().eth.getAccounts(accounts => console.log('these are my accounts ',accounts));
+
     console.log('COMPONENT DID MOUTN yeah');
     console.log('this is my web3:', getWeb3());
     console.log('tjhis is my ABI: ', NotarizerAbi);
+    
+    console.log('this my version ',getWeb3().version);
 
-    getWeb3().version.getNetwork((err, networkId) => {
+    getWeb3().eth.net.getId().then(networkId => {
       
       console.log('in the callback this is our network id ' + networkId);
       let networkName;
       let contractAddress;
       switch (networkId) {
-        case "1":
+        case 1:
           networkName='mainnet';
           contractAddress='0x5a7901d2c9C52C7149F9D4dA35f92242eB5d9992';
           break;
-        case "3":
+        case 3:
           networkName='ropsten';
           break;
-        case "4":
+        case 4:
           networkName='rinkeby';
           contractAddress='0xF3aE5E81E6469bAD34D429b2E8b94cc07Bee32ee';
           break;
@@ -312,38 +491,39 @@ class App extends React.Component {
           break;
       }
       
-      let contract = getWeb3().eth.contract(NotarizerAbi);
-      let notarizer = contract.at(contractAddress);
-  
-      let documentNotarizedEvent = notarizer.DocumentNotarized();
-      documentNotarizedEvent.watch((error,result) => {
-        if (!error) {
-          if (result.args.from === getWeb3().eth.defaultAccount) {
+      var notarizer = new (getWeb3().eth.Contract)(NotarizerAbi, contractAddress);      
+
+      let documentNotarizedEvent = notarizer.events.DocumentNotarized();
+      documentNotarizedEvent.on('data', (event) => {
+        console.log('we did get the event for the document having nbeen nortrized', event);
+
+        if (event.address === getWeb3().eth.defaultAccount) {
+          getWeb3().eth.getBlock(event.blockNumber, (block) => {
             this.setState({
               waitingForBlockchain: false,
               canFileBeHashed: false,
               currentStatus: 'Document-Hash has been successfully stored on the blockchain!',
               blockInfo: {
-                mineTime: result.args.mineTime
+                mineTime: block.timestamp
               }
             });
-            console.log('we did get the event for the document having nbeen nortrized', result);
-          }
-        } else {
-          console.log('There was an error in the event callback', error );
+            
+          });
         }
-        
       });
 
   
       this.setState({
         notarizer,
-        documentNotarizedEvent,
         networkName
       });
       
 
     });
+
+
+      
+    },5000);
 
   }
 
@@ -354,6 +534,17 @@ class App extends React.Component {
 
   render() {
     const {classes} = this.props;
+    const {
+      assets,
+      address,
+      connected,
+      chainId,
+      fetching,
+      showModal,
+      pendingRequest,
+      result
+    } = this.state;
+    
     return (
       <React.Fragment>
         <CssBaseline />
@@ -378,6 +569,17 @@ class App extends React.Component {
               </Button>
             </Toolbar>
           </AppBar>
+
+          {
+          (!!assets && !!assets.length) ? 'whattt' : 'nooooo'
+          }
+          
+          {
+            (connected) ? 
+              <span onClick={this.resetApp}>disconnect</span> 
+              : 
+              <span onClick={this.onConnect}>please connect</span>
+          }
 
           { /* Hero unit */ }
           <Container maxWidth="sm" component="main" className={classes.heroContent}>
@@ -473,7 +675,7 @@ class App extends React.Component {
             Check Document
             </label>
             <input type="text" onChange={this.handleChangeHashLookup}/>
-            <button onClick={this.handleSubmitHashLookup}>Check</button>        
+            <button>Check</button>        
             <label className="col-lg-2 control-label">Status</label>
             <h2 id="result"></h2>
             
