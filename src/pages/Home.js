@@ -390,7 +390,7 @@ class Home extends React.Component {
   }  
 
   handleDropzoneChange(files) {
-    console.log(files);
+    console.log('in dropzone changes: ',files);
 
     if (files.length === 1) {
       this.setState({
@@ -539,6 +539,7 @@ class Home extends React.Component {
                     </Typography>
         
                     <DropzoneArea filesLimit={1}
+                      maxFileSize={9999999999999}
                       dropzoneClass={classes.dropZone}
                       showPreviews={false}
                       showPreviewsInDropzone={false}
@@ -588,31 +589,6 @@ class Home extends React.Component {
 
 
 
-          { /* Footer */ }
-          <Container maxWidth="md" component="footer" className={classes.footer}>
-            <Grid container spacing={4} justify="space-evenly">
-              {footers.map((footer) => (
-        <Grid item xs={6} sm={3} key={footer.title}>
-                  <Typography variant="h6" color="textPrimary" gutterBottom>
-                    {footer.title}
-                  </Typography>
-                  <ul>
-                    {footer.description.map((item) => (
-          <li key={item}>
-                        <Link href="#" variant="subtitle1" color="textSecondary">
-                          {item}
-                        </Link>
-                      </li>
-        ))}
-                  </ul>
-                </Grid>
-      ))}
-            </Grid>
-            <Box mt={5}>
-              <Copyright />
-            </Box>
-          </Container>
-          { /* End footer */ }
 
       </React.Fragment>
     );
