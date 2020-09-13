@@ -24,7 +24,7 @@ class HashBlockInfo extends React.Component {
         <h4>BlockInfo</h4>
         Minetime: {(new Date(this.state.blockInfo.mineTime * 1000)).toString()}
         <br/>
-        Block numer: {this.state.blockInfo.blockNumber} 
+        Block numer: {this.state.blockInfo.blockNumber} &nbsp;
         <a href={'https://' + this.getEthscanSubdomain() + 'etherscan.io/block/' + this.state.blockInfo.blockNumber} target="_blank">
         show on etherscan
         </a>

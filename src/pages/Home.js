@@ -1,6 +1,6 @@
 import React from 'react';
-import './App.css';
-import NotarizerAbi from './eth/notarizer-abi';
+import './Home.css';
+import NotarizerAbi from '../eth/notarizer-abi';
 import { sha256 } from 'js-sha256';
 
 import Web3 from "web3";
@@ -25,34 +25,25 @@ import Grid from '@material-ui/core/Grid';
 import StarIcon from '@material-ui/icons/StarBorder';
 import Toolbar from '@material-ui/core/Toolbar';
 import Typography from '@material-ui/core/Typography';
-import MatLink from '@material-ui/core/Link';
+import Link from '@material-ui/core/Link';
 import { withStyles } from '@material-ui/core/styles';
 import Container from '@material-ui/core/Container';
 import Box from '@material-ui/core/Box';
 import Paper from '@material-ui/core/Paper';
 
-import HashBlockInfo from './components/HashBlockInfo';
+import HashBlockInfo from '../components/HashBlockInfo';
 
 import { DropzoneArea } from 'material-ui-dropzone'
 
-import { supportedChains } from './eth/chains';
-
-import Home from './pages/Home';
-
-import {
-  BrowserRouter as Router,
-  Switch,
-  Route,
-  Link
-} from "react-router-dom";
+import { supportedChains } from '../eth/chains';
 
 function Copyright() {
   return (
     <Typography variant="body2" color="textSecondary" align="center">
       {'Made by '}
-      <MatLink color="inherit" href="https://material-ui.com/">
+      <Link color="inherit" href="https://material-ui.com/">
         tobiga UG (haftungsbeschränkt)
-      </MatLink>
+      </Link>
     </Typography>
   );
 }
@@ -222,7 +213,7 @@ export function getChainData(chainId) {
 }
 
 
-class App extends React.Component {
+class Home extends React.Component {
   
   constructor(props) {
     super(props);
@@ -523,66 +514,77 @@ class App extends React.Component {
     return (
       <React.Fragment>
         <CssBaseline />
+              {
+                (connected) ? 
+                  <Container maxWidth="sm" component="main" className={classes.heroContent}>
+                    <Typography component="p" variant="subtitle1" align="center" color="textPrimary" gutterBottom>
+                      connected to
+                    </Typography>
+                    <Typography component="p" variant="h4" align="center" color="textPrimary" gutterBottom>
+                      {chainName}
+                    </Typography>
+                    <Typography component="p" variant="subtitle2" align="center" color="textSecondary" gutterBottom>
+                      address {address}
+                    </Typography>
+                    <Typography component="p" variant="subtitle2" align="center" color="textSecondary" gutterBottom>
+                      <Button variant="contained" color="secondary" onClick={this.resetApp}>
+                        Disconnect
+                      </Button>                    
+                    </Typography>
+
+
+                    <Typography className="alone vertical" variant="h5" align="center" color="textSecondary" component="p" gutterBottom>
+                      Select a file by clicking the box below. You can then store the hash-value of your file on the ethereum-blockchain. Your document will not leave your computer,
+                      the sha256-hash will be calculated in your browser.
+                    </Typography>
         
-    <Router>
-          <AppBar position="static" color="default" elevation={0} className={classes.appBar}>
-            <Toolbar className={classes.toolbar}>
-              <Typography variant="h6" color="inherit" noWrap className={classes.toolbarTitle}>
-                documented.me
-              </Typography>
-              <nav>
-                <MatLink variant="button" color="textPrimary" href="#" className={classes.link}>
-                  Features
-                </MatLink>
-                <MatLink variant="button" color="textPrimary" href="#" className={classes.link}>
-                  Enterprise
-                </MatLink>
-                <MatLink variant="button" color="textPrimary" href="#" className={classes.link}>
-                  Support
-                </MatLink>
-              </nav>
-              <Button href="#" color="primary" variant="outlined" className={classes.link}>
-                Login
-              </Button>
-            </Toolbar>
-          </AppBar>
-    
-    
-      <div>
-        <nav>
-          <ul>
-            <li>
-              <Link to="/">Home</Link>
-            </li>
-            <li>
-              <Link to="/about">About</Link>
-            </li>
-            <li>
-              <Link to="/users">Users</Link>
-            </li>
-          </ul>
-        </nav>
+                    <DropzoneArea filesLimit={1}
+                      dropzoneClass={classes.dropZone}
+                      showPreviews={false}
+                      showPreviewsInDropzone={false}
+                      showAlerts={false}
+                      onChange={this.handleDropzoneChange.bind(this)}
+                      />
 
-        {/* A <Switch> looks through its children <Route>s and
-            renders the first one that matches the current URL. */}
-        <Switch>
-          <Route path="/about">
-          'about'
-          </Route>
-          <Route path="/users">
-          'usres'
-          </Route>
-          <Route path="/">
-            <Home />
-          </Route>
-        </Switch>
-      </div>
-    </Router>
+                    <Typography className="alone vertical" align="center" color="textSecondary" component="p" gutterBottom>
+                      <Button variant="contained" color="secondary" disabled={this.isHashButtonDisabled()} onClick={this.handleFileSubmit.bind(this)}>
+                        Submit Hash
+                      </Button>
+                    </Typography>
+
+
+                  <Paper elevation={0} className={classes.resultContent}>
+                    {
+                      this.state.file ? 
+                      'Selected File: ' + this.state.file.name
+                      :
+                      'No file selected'
+                    }
+                    <br/>
+                    
+                    Status: {this.state.currentStatus}
+                    
+                    <br/>
+        
+                    { this.state.blockInfo ? <HashBlockInfo blockInfo={this.state.blockInfo} networkName={this.state.networkName} /> : ''}
+        
+                    </Paper>
         
 
+        
+                  </Container>
 
-
-
+                    
+                  : 
+                  
+                  <Container maxWidth="sm" component="main" className={classes.heroContent}>
+                    <Typography component="p" align="center" color="textPrimary" gutterBottom>
+                          <span onClick={this.onConnect}>please connect</span>
+                    </Typography>
+                  </Container>
+                  
+              }
+          
 
 
 
@@ -597,9 +599,9 @@ class App extends React.Component {
                   <ul>
                     {footer.description.map((item) => (
           <li key={item}>
-                        <MatLink href="#" variant="subtitle1" color="textSecondary">
+                        <Link href="#" variant="subtitle1" color="textSecondary">
                           {item}
-                        </MatLink>
+                        </Link>
                       </li>
         ))}
                   </ul>
@@ -617,4 +619,4 @@ class App extends React.Component {
   }
 }
 
-export default withStyles(styles)(App);
+export default withStyles(styles)(Home);
