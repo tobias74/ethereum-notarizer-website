@@ -305,20 +305,8 @@ class Home extends React.Component {
       walletconnect: {
         package: WalletConnectProvider,
         options: {
-          infuraId: process.env.REACT_APP_INFURA_ID
+          infuraId: '8ac0cf79809c426e968eb0b7450c5679'
         }
-      },
-      fortmatic: {
-        package: Fortmatic,
-        options: {
-          key: process.env.REACT_APP_FORTMATIC_KEY
-        }
-      },
-      authereum: {
-        package: Authereum
-      },
-      unilogin: {
-        package: UniLogin
       }
     };
     return providerOptions;
