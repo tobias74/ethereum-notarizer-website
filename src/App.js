@@ -103,7 +103,7 @@ const styles = (theme) => ({
 
 
 class App extends React.Component {
-  
+
   constructor(props) {
     super(props);
     this.state = {
@@ -119,42 +119,43 @@ class App extends React.Component {
 
 
   render() {
-    const {classes} = this.props;
+    const { classes } = this.props;
     const {
-      
+
     } = this.state;
-    
+
+    return "this site is offline";
     return (
       <React.Fragment>
         <CssBaseline />
-        
-          <Router>
-            <ResponsiveAppBar/>
-    
-            <Switch>
-              <Route path="/about">
-              'about'
-              </Route>
-              <Route path="/privacy">
-              'privacy'
-              </Route>
-              <Route path="/imprint">
-              'imprint'
-              </Route>
-              <Route path="/">
-                <Home />
-              </Route>
-            </Switch>
-  
-          </Router>
 
-          { /* Footer */ }
-          <Container maxWidth="md" component="footer" className={classes.footer}>
-            <Box mt={5}>
-              <Copyright />
-            </Box>
-          </Container>
-          { /* End footer */ }
+        <Router>
+          <ResponsiveAppBar />
+
+          <Switch>
+            <Route path="/about">
+              'about'
+            </Route>
+            <Route path="/privacy">
+              'privacy'
+            </Route>
+            <Route path="/imprint">
+              'imprint'
+            </Route>
+            <Route path="/">
+              <Home />
+            </Route>
+          </Switch>
+
+        </Router>
+
+        { /* Footer */}
+        <Container maxWidth="md" component="footer" className={classes.footer}>
+          <Box mt={5}>
+            <Copyright />
+          </Box>
+        </Container>
+        { /* End footer */}
 
       </React.Fragment>
     );
